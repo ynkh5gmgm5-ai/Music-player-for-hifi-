@@ -85,17 +85,19 @@ object PlaybackQueuePlanner {
         title: (T) -> String,
     ): PlaybackQueuePlan<T> {
         if (tracks.isEmpty()) {
-            return PlaybackQueuePlan.Rejected("No local tracks are available.")
+            return PlaybackQueuePlan.Rejected(PlaybackErrorMessage.noLocalTracks)
         }
 
         val requestedTrack = tracks.getOrNull(requestedIndex.coerceAtLeast(0))
         if (requestedTrack != null && !format(requestedTrack).isFirstPassPlayable) {
-            return PlaybackQueuePlan.Rejected(unsupportedReason(title(requestedTrack), format(requestedTrack)))
+            return PlaybackQueuePlan.Rejected(
+                PlaybackErrorMessage.unsupportedTrack(title(requestedTrack), format(requestedTrack))
+            )
         }
 
         val playableTracks = tracks.filter { format(it).isFirstPassPlayable }
         if (playableTracks.isEmpty()) {
-            return PlaybackQueuePlan.Rejected("No first-pass playable local tracks were found.")
+            return PlaybackQueuePlan.Rejected(PlaybackErrorMessage.noPlayableTracks)
         }
 
         val requestedId = requestedTrack?.let(trackId)
@@ -139,6 +141,4 @@ object PlaybackQueuePlanner {
         }
     }
 
-    private fun unsupportedReason(title: String, format: AudioFormat): String =
-        "${format.displayName} playback is reserved for a later engine module: $title"
 }

@@ -67,6 +67,12 @@ Exit gate:
 
 Goal: make the local library navigable instead of just playable.
 
+Current progress:
+
+- Minimal local search is implemented ahead of this phase: title, artist, and album matching
+  over the indexed local tracks, with direct playback from results.
+- Full library navigation, sorting, and filtering remain in this phase.
+
 Scope:
 
 - Song, artist, album, and folder views.
@@ -177,4 +183,3 @@ The user can help most by providing:
 - WAV/FLAC sample files that reproduce bugs.
 - Confirmation on product behavior when trade-offs are real.
 - Figma/reference details when the visual-system phase starts.
-

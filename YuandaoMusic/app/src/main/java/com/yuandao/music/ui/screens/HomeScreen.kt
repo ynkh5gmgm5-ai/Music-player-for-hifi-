@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -51,6 +52,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
@@ -105,6 +107,10 @@ fun HomeScreen(
     outputDevices: List<OutputDevice>,
     onRequestScan: () -> Unit,
     onRequestSafFolder: () -> Unit,
+    searchQuery: String,
+    searchResults: List<Track>,
+    onSearchQueryChange: (String) -> Unit,
+    onClearSearch: () -> Unit,
     onRescanSafFolders: () -> Unit,
     onPlayTrack: (Track) -> Unit,
     onPlayPause: () -> Unit,
@@ -114,10 +120,14 @@ fun HomeScreen(
     onShuffle: () -> Unit,
     onRepeat: () -> Unit,
     onStopPlayback: () -> Unit,
+    onPlayQueueTrack: (String) -> Unit,
+    onRemoveQueueTrack: (String) -> Unit,
+    onClearQueue: () -> Unit,
     onRefreshOutputs: () -> Unit,
 ) {
     var showQueueDrawer by remember { mutableStateOf(false) }
     var showNowPlaying by remember { mutableStateOf(false) }
+    var searchActive by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -128,6 +138,7 @@ fun HomeScreen(
                     radius = 1100f,
                 )
             )
+            .safeDrawingPadding()
     ) {
         LazyColumn(
             modifier = Modifier
@@ -140,76 +151,112 @@ fun HomeScreen(
                 Spacer(Modifier.height(18.dp))
                 TopSegment()
                 Spacer(Modifier.height(24.dp))
-                Header(onRequestScan, onRequestSafFolder)
-            }
-
-            item {
-                val firstPlayableTrack = tracks.firstOrNull { it.format.isFirstPassPlayable }
-                ContinueCard(
-                    playbackState = playbackState,
-                    fallbackTrack = firstPlayableTrack ?: tracks.firstOrNull(),
-                    lyrics = lyrics,
-                    onPlayFallback = { (firstPlayableTrack ?: tracks.firstOrNull())?.let(onPlayTrack) },
-                    onPlayPause = onPlayPause,
-                    onPrevious = onPrevious,
-                    onNext = onNext,
-                    onSeek = onSeek,
-                    onShuffle = onShuffle,
-                    onRepeat = onRepeat,
+                Header(
+                    onRequestScan = onRequestScan,
+                    onRequestSafFolder = onRequestSafFolder,
+                    searchActive = searchActive,
+                    searchQuery = searchQuery,
+                    onOpenSearch = { searchActive = true },
+                    onSearchQueryChange = onSearchQueryChange,
+                    onClearSearch = onClearSearch,
+                    onCloseSearch = {
+                        searchActive = false
+                        onClearSearch()
+                    },
                 )
             }
 
-            if (recentlyPlayedTracks.isNotEmpty()) {
+            if (searchActive) {
+                if (searchQuery.isBlank()) {
+                    item {
+                        SearchHint()
+                    }
+                } else {
+                    item {
+                        SectionHeader("搜索结果", "${searchResults.size} 首")
+                    }
+                    if (searchResults.isEmpty()) {
+                        item {
+                            SearchEmptyState(query = searchQuery)
+                        }
+                    } else {
+                        items(searchResults, key = { it.id }) { track ->
+                            SearchResultRow(
+                                track = track,
+                                onPlayTrack = onPlayTrack,
+                            )
+                        }
+                    }
+                }
+            } else {
+                item {
+                    val firstPlayableTrack = tracks.firstOrNull { it.format.isFirstPassPlayable }
+                    ContinueCard(
+                        playbackState = playbackState,
+                        fallbackTrack = firstPlayableTrack ?: tracks.firstOrNull(),
+                        lyrics = lyrics,
+                        onPlayFallback = { (firstPlayableTrack ?: tracks.firstOrNull())?.let(onPlayTrack) },
+                        onPlayPause = onPlayPause,
+                        onPrevious = onPrevious,
+                        onNext = onNext,
+                        onSeek = onSeek,
+                        onShuffle = onShuffle,
+                        onRepeat = onRepeat,
+                    )
+                }
+
+                if (recentlyPlayedTracks.isNotEmpty()) {
+                    item {
+                        RecentTracks(
+                            title = "最近播放",
+                            detail = "${recentlyPlayedTracks.size} 首",
+                            tracks = recentlyPlayedTracks,
+                            onPlayTrack = onPlayTrack,
+                        )
+                    }
+                }
+
                 item {
                     RecentTracks(
-                        title = "最近播放",
-                        detail = "${recentlyPlayedTracks.size} 首",
-                        tracks = recentlyPlayedTracks,
+                        title = "最近添加",
+                        detail = "${tracks.size} 首",
+                        tracks = tracks,
                         onPlayTrack = onPlayTrack,
                     )
                 }
-            }
 
-            item {
-                RecentTracks(
-                    title = "最近添加",
-                    detail = "${tracks.size} 首",
-                    tracks = tracks,
-                    onPlayTrack = onPlayTrack,
-                )
-            }
+                item {
+                    HiResFormats(tracks = tracks)
+                }
 
-            item {
-                HiResFormats(tracks = tracks)
-            }
+                item {
+                    LibraryOverview(
+                        tracks = tracks,
+                        albums = albums,
+                        artists = artists,
+                    )
+                }
 
-            item {
-                LibraryOverview(
-                    tracks = tracks,
-                    albums = albums,
-                    artists = artists,
-                )
-            }
+                item {
+                    OutputCard(
+                        outputDevices = outputDevices,
+                        playbackState = playbackState,
+                        onRefreshOutputs = onRefreshOutputs,
+                    )
+                }
 
-            item {
-                OutputCard(
-                    outputDevices = outputDevices,
-                    playbackState = playbackState,
-                    onRefreshOutputs = onRefreshOutputs,
-                )
-            }
-
-            item {
-                ScanStatus(
-                    scanState = scanState,
-                    onRequestScan = onRequestScan,
-                )
-                SafRootScanControls(
-                    safRootCount = safRootCount,
-                    scanning = scanState.scanning,
-                    onRescanSafFolders = onRescanSafFolders,
-                )
-                Spacer(Modifier.height(86.dp))
+                item {
+                    ScanStatus(
+                        scanState = scanState,
+                        onRequestScan = onRequestScan,
+                    )
+                    SafRootScanControls(
+                        safRootCount = safRootCount,
+                        scanning = scanState.scanning,
+                        onRescanSafFolders = onRescanSafFolders,
+                    )
+                    Spacer(Modifier.height(86.dp))
+                }
             }
         }
 
@@ -253,6 +300,15 @@ fun HomeScreen(
             QueueDrawer(
                 state = playbackState.queueDrawerState,
                 onDismiss = { showQueueDrawer = false },
+                onPlayTrack = { trackId ->
+                    onPlayQueueTrack(trackId)
+                    showQueueDrawer = false
+                },
+                onRemoveTrack = onRemoveQueueTrack,
+                onClearQueue = {
+                    onClearQueue()
+                    showQueueDrawer = false
+                },
             )
         }
     }
@@ -483,7 +539,44 @@ private fun SegmentLabel(text: String, selected: Boolean) {
 private fun Header(
     onRequestScan: () -> Unit,
     onRequestSafFolder: () -> Unit,
+    searchActive: Boolean,
+    searchQuery: String,
+    onOpenSearch: () -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    onClearSearch: () -> Unit,
+    onCloseSearch: () -> Unit,
 ) {
+    if (searchActive) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onCloseSearch) {
+                Icon(Icons.Rounded.Close, contentDescription = "退出搜索")
+            }
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                placeholder = { Text("搜索歌曲、艺术家或专辑") },
+                leadingIcon = {
+                    Icon(Icons.Rounded.Search, contentDescription = null)
+                },
+                trailingIcon = if (searchQuery.isNotBlank()) {
+                    {
+                        IconButton(onClick = onClearSearch) {
+                            Icon(Icons.Rounded.Close, contentDescription = "清空搜索")
+                        }
+                    }
+                } else {
+                    null
+                },
+            )
+        }
+        return
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -508,7 +601,7 @@ private fun Header(
             IconButton(onClick = onRequestSafFolder) {
                 Icon(Icons.Rounded.FolderOpen, contentDescription = "Add folder")
             }
-            IconButton(onClick = {}) {
+            IconButton(onClick = onOpenSearch) {
                 Icon(Icons.Rounded.Search, contentDescription = "Search")
             }
             IconButton(onClick = {}) {
@@ -869,11 +962,93 @@ private fun MiniPlayerBar(
     }
 }
 
+@Composable
+private fun SearchHint() {
+    GlassPanel {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("搜索本地曲库", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text(
+                "输入歌曲名、艺术家或专辑名开始搜索。",
+                color = Color.White.copy(alpha = 0.62f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchEmptyState(query: String) {
+    GlassPanel {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("没有找到匹配歌曲", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text(
+                "未找到与“$query”匹配的歌曲，请尝试其他关键词。",
+                color = Color.White.copy(alpha = 0.62f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchResultRow(
+    track: Track,
+    onPlayTrack: (Track) -> Unit,
+) {
+    GlassPanel {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onPlayTrack(track) }
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CoverArtwork(track, modifier = Modifier.size(64.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    track.title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    track.artistName,
+                    color = Color.White.copy(alpha = 0.68f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    "${track.albumTitle} · ${track.qualityLabel}",
+                    color = Color.White.copy(alpha = 0.48f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Icon(
+                Icons.Rounded.PlayArrow,
+                contentDescription = "播放 ${track.title}",
+                tint = YuandaoGreen,
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun QueueDrawer(
     state: PlaybackQueueDrawerState,
     onDismiss: () -> Unit,
+    onPlayTrack: (String) -> Unit,
+    onRemoveTrack: (String) -> Unit,
+    onClearQueue: () -> Unit,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -895,8 +1070,16 @@ private fun QueueDrawer(
                     Text("播放队列", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     Text(state.modeLabel, color = Color.White.copy(alpha = 0.56f))
                 }
-                TextButton(onClick = onDismiss) {
-                    Text("关闭")
+                Row {
+                    TextButton(
+                        onClick = onClearQueue,
+                        enabled = !state.isEmpty,
+                    ) {
+                        Text("清空")
+                    }
+                    TextButton(onClick = onDismiss) {
+                        Text("关闭")
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -905,7 +1088,7 @@ private fun QueueDrawer(
             } else {
                 state.current?.let { current ->
                     QueueDrawerSection("当前播放")
-                    QueueDrawerItemRow(current)
+                    QueueDrawerItemRow(current, onPlayTrack, onRemoveTrack)
                 }
                 if (state.upNext.isNotEmpty()) {
                     QueueDrawerSection("即将播放")
@@ -914,14 +1097,14 @@ private fun QueueDrawer(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(state.upNext, key = { it.id }) { item ->
-                            QueueDrawerItemRow(item)
+                            QueueDrawerItemRow(item, onPlayTrack, onRemoveTrack)
                         }
                     }
                 }
                 if (state.previous.isNotEmpty()) {
                     QueueDrawerSection("已播放")
                     state.previous.takeLast(3).forEach { item ->
-                        QueueDrawerItemRow(item)
+                        QueueDrawerItemRow(item, onPlayTrack, onRemoveTrack)
                     }
                 }
             }
@@ -941,12 +1124,17 @@ private fun QueueDrawerSection(title: String) {
 }
 
 @Composable
-private fun QueueDrawerItemRow(item: PlaybackQueueDrawerItem) {
+private fun QueueDrawerItemRow(
+    item: PlaybackQueueDrawerItem,
+    onPlayTrack: (String) -> Unit,
+    onRemoveTrack: (String) -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .background(if (item.isCurrent) YuandaoBlue.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.06f))
+            .clickable { onPlayTrack(item.id) }
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -969,6 +1157,9 @@ private fun QueueDrawerItemRow(item: PlaybackQueueDrawerItem) {
             Text(item.artistName, maxLines = 1, overflow = TextOverflow.Ellipsis, color = Color.White.copy(alpha = 0.54f))
         }
         Text(item.qualityLabel, color = Color.White.copy(alpha = 0.58f), style = MaterialTheme.typography.labelMedium)
+        IconButton(onClick = { onRemoveTrack(item.id) }) {
+            Icon(Icons.Rounded.Close, contentDescription = "移除 ${item.title}", tint = Color.White.copy(alpha = 0.58f))
+        }
     }
 }
 

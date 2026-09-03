@@ -20,8 +20,12 @@ fun YuandaoMusicApp(
         scanState = viewModel.scanState.collectAsStateWithLifecycle().value,
         safRootCount = viewModel.safRoots.collectAsStateWithLifecycle().value.size,
         outputDevices = viewModel.outputDevices.collectAsStateWithLifecycle().value,
+        searchQuery = viewModel.searchQuery.collectAsStateWithLifecycle().value,
+        searchResults = viewModel.searchResults.collectAsStateWithLifecycle().value,
         onRequestScan = onRequestScan,
         onRequestSafFolder = onRequestSafFolder,
+        onSearchQueryChange = viewModel::updateSearchQuery,
+        onClearSearch = viewModel::clearSearch,
         onRescanSafFolders = viewModel::rescanSafRoots,
         onPlayTrack = { track -> viewModel.playAll(track) },
         onPlayPause = viewModel::togglePlayPause,
@@ -31,6 +35,9 @@ fun YuandaoMusicApp(
         onShuffle = viewModel::toggleShuffle,
         onRepeat = viewModel::cycleRepeatMode,
         onStopPlayback = viewModel::stopPlayback,
+        onPlayQueueTrack = viewModel::playQueueTrack,
+        onRemoveQueueTrack = viewModel::removeQueueTrack,
+        onClearQueue = viewModel::clearQueue,
         onRefreshOutputs = viewModel::refreshOutputs,
     )
 }

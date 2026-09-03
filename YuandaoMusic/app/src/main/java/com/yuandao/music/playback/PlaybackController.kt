@@ -180,9 +180,61 @@ class PlaybackController(
         persistState()
     }
 
+    override fun playQueueTrack(trackId: String) {
+        val targetIndex = queue.indexOfFirst { it.id == trackId }
+        if (targetIndex < 0) return
+
+        val currentTrackId = _state.value.currentTrack?.id
+        val targetPositionMs = if (currentTrackId == trackId) {
+            player.currentPosition.coerceAtLeast(0L)
+        } else {
+            0L
+        }
+        playbackErrorMessage = null
+        player.setMediaItems(queue.map { it.toMediaItem() }, targetIndex, targetPositionMs)
+        lastMediaItemIndex = targetIndex
+        player.prepare()
+        if (!playWhenFocusAvailable()) return
+        publishState()
+        persistState()
+    }
+
+    override fun removeQueueTrack(trackId: String) {
+        val edit = PlaybackQueueEditor.remove(
+            tracks = queue,
+            currentIndex = player.currentMediaItemIndex,
+            removedTrackId = trackId,
+            trackId = Track::id,
+        ) ?: return
+
+        playbackErrorMessage = null
+        val wasPlaying = player.playWhenReady
+        val currentPositionMs = player.currentPosition.coerceAtLeast(0L)
+        linearQueue = linearQueue.filter { it.id != trackId }
+
+        if (edit.tracks.isEmpty()) {
+            stopPlayback()
+            return
+        }
+
+        queue = edit.tracks
+        val nextIndex = edit.currentIndex.coerceIn(0, queue.lastIndex)
+        val nextPositionMs = if (edit.removedCurrent) 0L else currentPositionMs
+        player.setMediaItems(queue.map { it.toMediaItem() }, nextIndex, nextPositionMs)
+        lastMediaItemIndex = nextIndex
+        player.prepare()
+        if (wasPlaying && !playWhenFocusAvailable()) return
+        publishState()
+        persistState()
+    }
+
+    override fun clearQueue() {
+        stopPlayback()
+    }
+
     override fun togglePlayPause() {
         if (queue.isEmpty()) {
-            playbackErrorMessage = "Select a playable local track first."
+            playbackErrorMessage = PlaybackErrorMessage.noLocalTracks
             publishState()
             return
         }
@@ -319,7 +371,7 @@ class PlaybackController(
 
     private fun playWhenFocusAvailable(): Boolean {
         if (!requestAudioFocus()) {
-            playbackErrorMessage = "Audio focus is unavailable."
+            playbackErrorMessage = PlaybackErrorMessage.audioFocusUnavailable
             publishState()
             persistState()
             return false
@@ -404,7 +456,10 @@ class PlaybackController(
     }
 
     override fun onPlayerError(error: PlaybackException) {
-        playbackErrorMessage = error.localizedMessage ?: "Playback failed for this track."
+        playbackErrorMessage = PlaybackErrorMessage.fromPlaybackException(
+            error = error,
+            trackTitle = _state.value.currentTrack?.title,
+        )
         publishState()
         persistState()
     }

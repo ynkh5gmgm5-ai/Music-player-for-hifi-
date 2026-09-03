@@ -45,6 +45,33 @@ class PlaybackQueuePlannerTest {
         )
 
         assertTrue(plan is PlaybackQueuePlan.Rejected)
+        assertEquals("APE 暂不支持播放：ape", (plan as PlaybackQueuePlan.Rejected).reason)
+    }
+
+    @Test
+    fun planRejectsEmptyQueueWithActionableMessage() {
+        val plan = PlaybackQueuePlanner.plan(
+            tracks = emptyList<FixtureTrack>(),
+            requestedIndex = 0,
+            trackId = { it.id },
+            format = { it.format },
+            title = { it.title },
+        )
+
+        assertEquals(PlaybackErrorMessage.noLocalTracks, (plan as PlaybackQueuePlan.Rejected).reason)
+    }
+
+    @Test
+    fun planRejectsQueueWithoutPlayableFormatsWithActionableMessage() {
+        val plan = PlaybackQueuePlanner.plan(
+            tracks = listOf(FixtureTrack("ape", AudioFormat.APE)),
+            requestedIndex = 99,
+            trackId = { it.id },
+            format = { it.format },
+            title = { it.title },
+        )
+
+        assertEquals(PlaybackErrorMessage.noPlayableTracks, (plan as PlaybackQueuePlan.Rejected).reason)
     }
 
     @Test

@@ -20,6 +20,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -33,6 +34,14 @@ class LibraryViewModel(
 ) : ViewModel() {
     val tracks: StateFlow<List<Track>> =
         musicRepository.tracks.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery
+
+    val searchResults: StateFlow<List<Track>> =
+        combine(tracks, searchQuery) { availableTracks, query ->
+            LibrarySearch.filterTracks(availableTracks, query)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val albums: StateFlow<List<Album>> =
         musicRepository.albums.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -68,18 +77,18 @@ class LibraryViewModel(
 
     fun scanMediaStore() {
         viewModelScope.launch {
-            _scanState.value = ScanUiState(scanning = true, message = "Scanning local library")
+            _scanState.value = ScanUiState(scanning = true, message = ScanMessageFormatter.mediaStoreStarted)
             runCatching { musicRepository.scanMediaStore() }
                 .onSuccess { summary ->
                     _scanState.value = ScanUiState(
                         scanning = false,
-                        message = "Indexed ${summary.scannedTracks} local tracks",
+                        message = ScanMessageFormatter.indexed("本机曲库", summary.scannedTracks),
                     )
                 }
                 .onFailure { error ->
                     _scanState.value = ScanUiState(
                         scanning = false,
-                        message = error.message ?: "Scan failed",
+                        message = ScanMessageFormatter.failed("本机曲库", error),
                     )
                 }
         }
@@ -87,7 +96,7 @@ class LibraryViewModel(
 
     fun scanSafFolder(uri: Uri, displayName: String? = null) {
         viewModelScope.launch {
-            _scanState.value = ScanUiState(scanning = true, message = "Scanning selected folder")
+            _scanState.value = ScanUiState(scanning = true, message = ScanMessageFormatter.selectedFolderStarted)
             runCatching {
                 musicRepository.addSafRoot(uri, displayName)
                 musicRepository.rescanSafRoots()
@@ -95,13 +104,13 @@ class LibraryViewModel(
                 .onSuccess { summary ->
                     _scanState.value = ScanUiState(
                         scanning = false,
-                        message = "Indexed ${summary.scannedTracks} folder tracks",
+                        message = ScanMessageFormatter.indexed("选定文件夹", summary.scannedTracks),
                     )
                 }
                 .onFailure { error ->
                     _scanState.value = ScanUiState(
                         scanning = false,
-                        message = error.message ?: "Folder scan failed",
+                        message = ScanMessageFormatter.failed("选定文件夹", error),
                     )
                 }
         }
@@ -109,18 +118,18 @@ class LibraryViewModel(
 
     fun rescanSafRoots() {
         viewModelScope.launch {
-            _scanState.value = ScanUiState(scanning = true, message = "Rescanning saved folders")
+            _scanState.value = ScanUiState(scanning = true, message = ScanMessageFormatter.savedFoldersStarted)
             runCatching { musicRepository.rescanSafRoots() }
                 .onSuccess { summary ->
                     _scanState.value = ScanUiState(
                         scanning = false,
-                        message = "Indexed ${summary.scannedTracks} folder tracks",
+                        message = ScanMessageFormatter.indexed("已保存文件夹", summary.scannedTracks),
                     )
                 }
                 .onFailure { error ->
                     _scanState.value = ScanUiState(
                         scanning = false,
-                        message = error.message ?: "Folder rescan failed",
+                        message = ScanMessageFormatter.failed("已保存文件夹", error),
                     )
                 }
         }
@@ -132,6 +141,17 @@ class LibraryViewModel(
         playbackController.playQueue(queue, startIndex.coerceAtLeast(0))
     }
 
+    fun updateSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
+    fun clearSearch() {
+        _searchQuery.value = ""
+    }
+
+    fun playQueueTrack(trackId: String) = playbackController.playQueueTrack(trackId)
+    fun removeQueueTrack(trackId: String) = playbackController.removeQueueTrack(trackId)
+    fun clearQueue() = playbackController.clearQueue()
     fun togglePlayPause() = playbackController.togglePlayPause()
     fun next() = playbackController.next()
     fun previous() = playbackController.previous()

@@ -8,6 +8,9 @@ interface PlaybackGateway {
 
     suspend fun restoreIfPossible(availableTracks: List<Track>)
     fun playQueue(tracks: List<Track>, startIndex: Int = 0)
+    fun playQueueTrack(trackId: String)
+    fun removeQueueTrack(trackId: String)
+    fun clearQueue()
     fun togglePlayPause()
     fun next()
     fun previous()
